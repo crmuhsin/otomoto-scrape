@@ -1,10 +1,8 @@
-const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
 
-const baseUrl = "https://www.otomoto.pl";
 const initialUrl =
   "https://www.otomoto.pl/ciezarowe/uzytkowe/mercedes-benz/od-2014/q-actros?search%5Bfilter_enum_damaged%5D=0&search%5Border%5D=created_at%3Adesc";
 
@@ -25,44 +23,40 @@ const isExists = (path) => {
   }
 };
 
-async function getNewPageHtml(url) {
+async function configureBrowser() {
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1024, height: 768 });
+  await page.setDefaultNavigationTimeout(0);
+  return { browser, page };
+}
+
+async function getNewPageHtml(page, url) {
   try {
     retryNumber++;
     if (retryNumber >= maxRetryNumber) {
       console.log(" retryNumber exceeded maxRetryNumber ! ");
       return;
     }
-    let response = await fetch(url);
-    let html = await response.text();
-    let $ = cheerio.load(html);
+    await page.waitForTimeout(retryNumber * 1000);
+    await page.goto(url, { waitUntil: "networkidle2" });
+    let html = page.evaluate(() => document.body.innerHTML);
     retryNumber = 0;
-    return $;
+    return html;
   } catch (error) {
-    getNewPageHtml(url);
+    getNewPageHtml(page, url);
   }
 }
 
-function getNextPageUrl($) {
-  let nextPageUrl = undefined;
-  let foundCurrent = false;
-  $(".pagination-item").each((i, elem) => {
-    let isActive = $(elem).attr("class").includes("pagination-item__active");
-    let url = $("a", elem).attr("href");
+async function getTotalAdsCount(html) {
+  let $ = cheerio.load(html);
+  let totalAds = $("h1.optimus-app-xeol1s-Text").text();
+  totalAds = totalAds.split(" ")[2];
+  return totalAds;
+}
 
-    if (nextPageUrl) {
-      return;
-    }
-
-    if (foundCurrent && url) {
-      nextPageUrl = baseUrl + url;
-    }
-
-    if (isActive) {
-      foundCurrent = true;
-    }
-  });
-
-  return nextPageUrl;
+function getNextPageUrl(index) {
+  return `${initialUrl}&page=${index + 1}`;
 }
 
 async function writeInJson() {
@@ -84,7 +78,8 @@ async function writeInJson() {
   }
 }
 
-function addItems($) {
+async function addItems(html) {
+  let $ = cheerio.load(html);
   $('article[data-testid="listing-ad"]').each(function (i, el) {
     let itemId = $(this).attr("id");
     let itemUrl = $("a", el).attr("href");
@@ -92,13 +87,14 @@ function addItems($) {
   });
 }
 
-function trimString(string) {
-  return string.text().replace(/\s+/g, " ").trim();
+function trimString (string) {
+  return string.text().replace(/\s+/g,' ').trim()
 }
 
-async function scrapeTruckItem(item) {
+async function scrapeTruckItem(page, item) {
   try {
-    let $ = await getNewPageHtml(item.itemUrl);
+    let html = await getNewPageHtml(page, item.itemUrl);
+    let $ = cheerio.load(html);
     let title = trimString($("h1.offer-title").first());
     let price = trimString($("span.offer-price__number").first());
     let registrationDate = "";
@@ -139,24 +135,31 @@ async function scrapeTruckItem(item) {
 
 async function startScraping() {
   try {
-    let url = initialUrl;
-    while (url) {
-      console.log("page", url);
-      let $ = await getNewPageHtml(url);
-      addItems($);
-      url = getNextPageUrl($);
+    let url = "";
+    let { browser, page } = await configureBrowser();
+    let html = await getNewPageHtml(page, initialUrl);
+    let totalAds = await getTotalAdsCount(html);
+    let totalPage = Math.ceil(+totalAds / 32);
+    for (let index = 0; index < totalPage; index++) {
+      if (index) {
+        url = getNextPageUrl(index);
+        html = await getNewPageHtml(page, url);
+      }
+      console.log("page", index + 1);
+      addItems(html);
     }
-    console.log("adList", adList.length);
     for (let index = 0; index < adList.length; index++) {
       const item = adList[index];
-      let truck = await scrapeTruckItem(item);
+      let truck = await scrapeTruckItem(page, item);
       console.log("truck", index + 1);
       console.log(truck);
       adDetailList.push(truck);
     }
     writeInJson();
+    await browser.close();
   } catch (error) {
     console.log(error);
+    await browser.close();
   }
 }
 
