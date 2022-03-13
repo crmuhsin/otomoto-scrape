@@ -4,9 +4,9 @@ function trimString(string) {
     return string.text().replace(/\s+/g, " ").trim();
 }
 
-async function scrapeTruckItem(item) {
+async function scrapeTruckItem(item, page = null) {
     try {
-        let $ = await getNewPageHtml(item.itemUrl);
+        let $ = await getNewPageHtml(item.itemUrl, page);
         let title = trimString($("h1.offer-title").first());
         let price = trimString($("span.offer-price__number").first());
         let registrationDate = "";
@@ -45,11 +45,11 @@ async function scrapeTruckItem(item) {
     }
 }
 let counter
-const scraping = async (adList) => {
+const scraping = async (adList, page) => {
     let adDetailList = []
     for (let index = 0; index < adList.length; index++) {
         const item = adList[index];
-        let truck = await scrapeTruckItem(item);
+        let truck = await scrapeTruckItem(item, page);
         // console.log("truck", truck);
         adDetailList.push(truck);
     }
@@ -59,7 +59,7 @@ const scraping = async (adList) => {
 process.on("message", async (msg) => {
     counter = msg.i
     console.log(61, msg.i, "start")
-    const adDetailList = await scraping(msg.temporary);
+    const adDetailList = await scraping(msg.temporary, msg.page);
     process.send(adDetailList);
     console.log(61, msg.i, "end")
 });

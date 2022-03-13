@@ -5,14 +5,15 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "puppet-scrape": "node puppet/index.js",
-    "fetch-scrape": "node fetch/index.js"
+    "fetch-scrape": "node fetch-scrape.js",
+    "puppet-scrape": "node puppet-scrape.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "cheerio": "^1.0.0-rc.10",
+    "node-fetch": "^3.2.0",
     "puppeteer": "^11.0.0",
-    "node-fetch": "^3.2.0"
+    "query-string": "^7.1.1"
   }
 }
