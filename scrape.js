@@ -1,11 +1,11 @@
 const { getNewPageHtml } = require('./getnewpage');
 
-function trimString(string) {
-    return string.text().replace(/\s+/g, " ").trim();
-}
-
 async function scrapeTruckItem(item, page = null) {
     try {
+        let trimString = (string) => {
+            return string.text().replace(/\s+/g, " ").trim();
+        }
+        console.log(8, item);
         let $ = await getNewPageHtml(item.itemUrl, page);
         let title = trimString($("h1.offer-title").first());
         let price = trimString($("span.offer-price__number").first());
@@ -67,6 +67,10 @@ process.on("message", async (msg) => {
 process.on('exit', (code) => {
     console.log(`${counter} child process exited with code ${code}`);
 });
+
+module.exports = {
+    scrapeTruckItem
+}
 
 // 117 results
 // 30 chunk 43.201s
